@@ -21,10 +21,6 @@ import {
   AlertTriangle,
   Bed,
   LogOut,
-  User,
-  FileText,
-  Signature,
-  ShieldCheck,
   Settings,
   RefreshCw,
   HeartPulse,
@@ -33,18 +29,24 @@ import {
   BarChart3,
   Clock,
   Coins,
+  Signature,
+  ShieldCheck,
+  FileText,
 } from 'lucide-react';
 
 interface DashboardContract {
   kpis: {
-    consultas_medicas: number;
+    totalAtenCE: number;
     consultas_tendencia: number;
-    cirugias_exitosas: number;
+    totalHospit: number;
     cirugias_tendencia: number;
-    atenciones_emergencia: number;
+    totalEmergencia: number;
     emergencia_tendencia: number;
-    ocupacion_camas: number;
-    camas_tendencia: number;
+    // Nuevas variables unificadas con el Service y Repository
+    Camas_Ocupadas_Hosp: number;
+    Camas_Desocupadas_Hosp: number;
+    Camas_Ocupadas_Emerg: number;
+    Camas_Desocupadas_Emerg: number;
   };
   rendimiento_mensual: Array<{ mes: string; cantidad: number }>;
   historial_quirurgico: Array<{ mes: string; cantidad: number }>;
@@ -261,7 +263,6 @@ export default function DashboardPage() {
         <nav className="relative flex-1 overflow-y-auto p-5 space-y-4 bg-slate-950/30 backdrop-blur-xl">
           {!sidebarCollapsed && <div className="mb-4 px-2 text-xs uppercase tracking-[0.3em] text-sky-300">Modulos clinicos</div>}
           
-          {/* GRUPO 1: PRODUCCION MEDICA */}
           <div className="space-y-2">
             <button
               type="button"
@@ -280,8 +281,6 @@ export default function DashboardPage() {
 
             {!sidebarCollapsed && expandedGroups.includes('produccion') && (
               <ul className="mt-1 pl-2 space-y-1 border-l border-slate-800/80 ml-5">
-                
-                {/* SUB-MENU: Consulta Externa */}
                 <li>
                   <button
                     type="button"
@@ -295,7 +294,6 @@ export default function DashboardPage() {
                     <ChevronDown className={`w-3.5 h-3.5 text-slate-500 transition-transform duration-200 ${consultaExternaOpen ? 'rotate-180' : ''}`} />
                   </button>
 
-                  {/* Hijos de Consulta Externa redirigiendo a rutas planas de dashboard */}
                   {consultaExternaOpen && (
                     <ul className="mt-1 pl-4 space-y-1 bg-slate-950/20 rounded-xl p-1.5 border border-slate-900">
                       <li>
@@ -336,7 +334,7 @@ export default function DashboardPage() {
                   <button type="button" className="w-full block rounded-xl px-3 py-2.5 text-left text-slate-300 hover:text-white hover:bg-slate-800 transition-all">
                     <span className="inline-flex items-center gap-2 text-sm">
                       <AlertTriangle className="w-4 h-4 text-amber-500" />
-                      <span>Emergencia</span>
+                      <span>Emergency</span>
                     </span>
                   </button>
                 </li>
@@ -352,7 +350,6 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* GRUPO 2: PROGRAMAS ESTRATEGICOS */}
           <div className="space-y-2">
             <button
               type="button"
@@ -469,92 +466,129 @@ export default function DashboardPage() {
           </div>
         ) : (
           <>
-            {/* GRID DE CARDS KPI CONECTADOS A DATA REAL */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {/* GRID DE CARDS KPI RECONFIGURADO A 5 COLUMNAS PARA LAS NUEVAS TARJETAS */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               
-              {/* Card 1: Consulta Externa */}
-              <div className="bg-white border border-slate-100 p-6 rounded-3xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex items-center justify-between group">
-                <div className="space-y-2">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Consultas Medicas</span>
-                  <h3 className="text-3xl font-extrabold text-slate-800 tracking-tight">
-                    {data.kpis.consultas_medicas.toLocaleString()}
+              {/* Card 1: Consultorio Externo Trimestral */}
+              <div className="bg-white border border-slate-100 p-5 rounded-3xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex items-center justify-between group">
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Consultorio Externo</span>
+                  <span className="text-xs text-slate-400 font-medium block -mt-1">Trimestral</span>
+                  <h3 className="text-2xl font-extrabold text-slate-800 tracking-tight mt-1">
+                    {data.kpis.totalAtenCE.toLocaleString()}
                   </h3>
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full inline-block ${data.kpis.consultas_tendencia >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
-                    {data.kpis.consultas_tendencia >= 0 ? `+${data.kpis.consultas_tendencia}%` : `${data.kpis.consultas_tendencia}%`} vs mes anterior
-                  </span>
                 </div>
-                <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center group-hover:scale-105 transition-transform duration-300">
-                  <UserCheck className="w-8 h-8 text-sky-500" />
+                <div className="w-12 h-12 rounded-xl bg-slate-50 flex items-center justify-center group-hover:scale-105 transition-transform duration-300 shrink-0">
+                  <UserCheck className="w-6 h-6 text-sky-500" />
                 </div>
               </div>
 
-              {/* Card 2: Cirugias */}
-              <div className="bg-white border border-slate-100 p-6 rounded-3xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex items-center justify-between group">
-                <div className="space-y-2">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Cirugias Exitosas</span>
-                  <h3 className="text-3xl font-extrabold text-slate-800 tracking-tight">
-                    {data.kpis.cirugias_exitosas.toLocaleString()}
+              {/* Card 2: Hospitalizacion Trimestral */}
+              <div className="bg-white border border-slate-100 p-5 rounded-3xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex items-center justify-between group">
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Hospitalizacion</span>
+                  <span className="text-xs text-slate-400 font-medium block -mt-1">Trimestral</span>
+                  <h3 className="text-2xl font-extrabold text-slate-800 tracking-tight mt-1">
+                    {data.kpis.totalHospit.toLocaleString()}
                   </h3>
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full inline-block ${data.kpis.cirugias_tendencia >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
-                    {data.kpis.cirugias_tendencia >= 0 ? `+${data.kpis.cirugias_tendencia}%` : `${data.kpis.cirugias_tendencia}%`} vs mes anterior
-                  </span>
                 </div>
-                <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center group-hover:scale-105 transition-transform duration-300">
-                  <Activity className="w-8 h-8 text-blue-500" />
+                <div className="w-12 h-12 rounded-xl bg-slate-50 flex items-center justify-center group-hover:scale-105 transition-transform duration-300 shrink-0">
+                  <Activity className="w-6 h-6 text-blue-500" />
                 </div>
               </div>
 
-              {/* Card 3: Emergencias */}
-              <div className="bg-white border border-slate-100 p-6 rounded-3xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex items-center justify-between group">
-                <div className="space-y-2">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Atenciones Emergencia</span>
-                  <h3 className="text-3xl font-extrabold text-slate-800 tracking-tight">
-                    {data.kpis.atenciones_emergencia.toLocaleString()}
+              {/* Card 3: Emergencia Trimestral */}
+              <div className="bg-white border border-slate-100 p-5 rounded-3xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex items-center justify-between group">
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Emergencia</span>
+                  <span className="text-xs text-slate-400 font-medium block -mt-1">Trimestral</span>
+                  <h3 className="text-2xl font-extrabold text-slate-800 tracking-tight mt-1">
+                    {data.kpis.totalEmergencia.toLocaleString()}
                   </h3>
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full inline-block ${data.kpis.emergencia_tendencia >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
-                    {data.kpis.emergencia_tendencia >= 0 ? `+${data.kpis.emergencia_tendencia}%` : `${data.kpis.emergencia_tendencia}%`} vs mes anterior
-                  </span>
                 </div>
-                <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center group-hover:scale-105 transition-transform duration-300">
-                  <AlertTriangle className="w-8 h-8 text-amber-500" />
+                <div className="w-12 h-12 rounded-xl bg-slate-50 flex items-center justify-center group-hover:scale-105 transition-transform duration-300 shrink-0">
+                  <AlertTriangle className="w-6 h-6 text-amber-500" />
                 </div>
               </div>
 
-              {/* Card 4: Camas */}
-              <div className="bg-white border border-slate-100 p-6 rounded-3xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex items-center justify-between group">
-                <div className="space-y-2">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Ocupacion de Camas</span>
-                  <h3 className="text-3xl font-extrabold text-slate-800 tracking-tight">
-                    {data.kpis.ocupacion_camas}%
-                  </h3>
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full inline-block ${data.kpis.camas_tendencia >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
-                    {data.kpis.camas_tendencia >= 0 ? `+${data.kpis.camas_tendencia}%` : `${data.kpis.camas_tendencia}%`} esta semana
-                  </span>
+              {/* Card 4: Camas Hospitalizacion en Tiempo Real */}
+              <div className="bg-white border border-slate-100 p-5 rounded-3xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between group">
+                <div className="flex items-center justify-between w-full">
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Camas Hosp.</span>
+                  </div>
+                  <div className="w-12 h-12 rounded-xl bg-slate-50 flex items-center justify-center text-teal-500 shrink-0">
+                    <Bed className="w-6 h-6" />
+                  </div>
                 </div>
-                <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center group-hover:scale-105 transition-transform duration-300">
-                  <Bed className="w-8 h-8 text-teal-500" />
+                
+                <div className="mt-3 space-y-1.5">
+                  {/* Fila Camas Ocupadas: Circulo Verde Grande */}
+                  <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+                    <span className="text-xs font-bold text-slate-500">Ocupadas:</span>
+                    <span className="text-lg font-black text-slate-800 leading-none">
+                      {data.kpis.Camas_Ocupadas_Hosp.toLocaleString()}
+                    </span>
+                  </div>
+                  {/* Fila Camas Desocupadas: Puntito Rojo Abajo */}
+                  <div className="flex items-center gap-2 border-t border-slate-100 pt-1">
+                    <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0"></span>
+                    <span className="text-[11px] font-medium text-slate-400">Disponibles:</span>
+                    <span className="text-xs font-bold text-slate-600">
+                      {data.kpis.Camas_Desocupadas_Hosp.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 5: Camas Emergencia en Tiempo Real */}
+              <div className="bg-white border border-slate-100 p-5 rounded-3xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between group">
+                <div className="flex items-center justify-between w-full">
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Camas Emerg.</span>
+                  </div>
+                  <div className="w-12 h-12 rounded-xl bg-slate-50 flex items-center justify-center text-rose-500 shrink-0">
+                    <Bed className="w-6 h-6" />
+                  </div>
+                </div>
+                
+                <div className="mt-3 space-y-1.5">
+                  {/* Fila Camas Ocupadas: Circulo Verde Grande */}
+                  <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+                    <span className="text-xs font-bold text-slate-500">Ocupadas:</span>
+                    <span className="text-lg font-black text-slate-800 leading-none">
+                      {data.kpis.Camas_Ocupadas_Emerg.toLocaleString()}
+                    </span>
+                  </div>
+                  {/* Fila Camas Desocupadas: Puntito Rojo Abajo */}
+                  <div className="flex items-center gap-2 border-t border-slate-100 pt-1">
+                    <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0"></span>
+                    <span className="text-[11px] font-medium text-slate-400">Disponibles:</span>
+                    <span className="text-xs font-bold text-slate-600">
+                      {data.kpis.Camas_Desocupadas_Emerg.toLocaleString()}
+                    </span>
+                  </div>
                 </div>
               </div>
 
             </div>
 
-            {/* SECCION DE GRAFICOS INTERACTIVOS */}
+            {/* SECCION DE GRAFICOS INTERACTIVOS CORREGIDOS */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               
-              {/* GRAFICO 1: RENDIMIENTO DE CONSULTAS (BARRAS) */}
+              {/* GRAFICO 1: RENDIMIENTO DE CONSULTAS */}
               <div className="bg-white border border-slate-100 p-6 md:p-8 rounded-3xl shadow-sm space-y-4">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-4">
                   <h3 className="font-extrabold text-lg text-slate-900">Rendimiento Mensual de Consultas</h3>
-                  <span className="text-xs font-bold text-sky-500 uppercase bg-sky-50 px-2.5 py-1 rounded-full">
-                    SIGH Principal
-                  </span>
                 </div>
                 <div className="w-full h-80">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={data.rendimiento_mensual} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <BarChart data={data.rendimiento_mensual} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                       <XAxis dataKey="mes" stroke="#94a3b8" fontSize={12} tickLine={false} />
-                      <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} />
+                      <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} width={50} />
                       <Tooltip
                         contentStyle={{ background: '#0f172a', color: '#fff', borderRadius: '12px', border: 'none' }}
                         itemStyle={{ color: '#38bdf8' }}
@@ -565,17 +599,14 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* GRAFICO 2: HISTORIAL QUIRURGICO (AREA) */}
+              {/* GRAFICO 2: MONITORIZACION POR HORA */}
               <div className="bg-white border border-slate-100 p-6 md:p-8 rounded-3xl shadow-sm space-y-4">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-                  <h3 className="font-extrabold text-lg text-slate-900">Historial Quirurgico Complejo</h3>
-                  <span className="text-xs font-bold text-emerald-500 uppercase bg-emerald-50 px-2.5 py-1 rounded-full">
-                    SIGH Externa
-                  </span>
+                  <h3 className="font-extrabold text-lg text-slate-900">Monitoreo de atenciones por hora</h3>
                 </div>
                 <div className="w-full h-80">
                   <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={data.historial_quirurgico} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <AreaChart data={data.historial_quirurgico} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                       <defs>
                         <linearGradient id="colorCirugia" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
@@ -584,11 +615,8 @@ export default function DashboardPage() {
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                       <XAxis dataKey="mes" stroke="#94a3b8" fontSize={12} tickLine={false} />
-                      <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} />
-                      <Tooltip
-                        contentStyle={{ background: '#0f172a', color: '#fff', borderRadius: '12px', border: 'none' }}
-                        itemStyle={{ color: '#10b981' }}
-                      />
+                      <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} width={50} />
+                      <Tooltip contentStyle={{ background: '#0f172a', color: '#fff', borderRadius: '12px', border: 'none' }} />
                       <Area
                         type="monotone"
                         dataKey="cantidad"
@@ -596,7 +624,7 @@ export default function DashboardPage() {
                         strokeWidth={3}
                         fillOpacity={1}
                         fill="url(#colorCirugia)"
-                        name="Cirugias"
+                        name="Atenciones"
                       />
                     </AreaChart>
                   </ResponsiveContainer>
@@ -609,7 +637,7 @@ export default function DashboardPage() {
             <div className="bg-gradient-to-br from-white to-slate-50 border border-slate-100 p-8 rounded-[32px] shadow-sm space-y-6">
               <div>
                 <h3 className="font-extrabold text-xl text-slate-900">Modulos Administrativos y de Control</h3>
-                <p className="text-slate-500 text-sm mt-1">
+                <p className="text-slate-500 mt-1 text-sm">
                   Accesos directos para la gestion del hospital y analisis de interoperabilidad.
                 </p>
               </div>
