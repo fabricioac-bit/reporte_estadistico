@@ -24,12 +24,27 @@ export class DashboardService {
         { servicioId: 3, servicioNombre: 'Hospitalización' }
       ];
 
-      const estadoCitasPorServicio = rendimientoRaw.map((servicio) => ({
-        servicioId: servicio.IdTipoServicio,
-        servicioNombre: servicio.ServicioNombre,
-        atendidos: servicio.Cant_Atendidos,
-        noAtendidos: servicio.Cant_NoAtendidos,
-        eliminadas: servicio.Cant_Eliminadas
+      const serviciosCitas = [
+        { servicioId: 1, servicioNombre: 'CE' },
+        { servicioId: 2, servicioNombre: 'Emergencia' },
+        { servicioId: 3, servicioNombre: 'Hospitalización' }
+      ];
+
+      const estadoCitasPorServicio = serviciosCitas.map((servicio) => ({
+        servicioId: servicio.servicioId,
+        servicioNombre: servicio.servicioNombre,
+        datos: this.mesesTrimestre.map((mes) => {
+          const registro = rendimientoRaw.find(
+            (item) => item.IdTipoServicio === servicio.servicioId && item.MesNum === mes.num
+          );
+
+          return {
+            mes: mes.nombre,
+            atendidos: registro ? registro.Cant_Atendidos : 0,
+            noAtendidos: registro ? registro.Cant_NoAtendidos : 0,
+            eliminadas: registro ? registro.Cant_Eliminadas : 0
+          };
+        })
       }));
 
       const financiamientoPorServicio = serviciosFinanciamiento.map((servicio) => {

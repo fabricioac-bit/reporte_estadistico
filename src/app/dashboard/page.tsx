@@ -60,9 +60,12 @@ interface DashboardContract {
   estado_citas_por_servicio: Array<{
     servicioId: number;
     servicioNombre: string;
-    atendidos: number;
-    noAtendidos: number;
-    eliminadas: number;
+    datos: Array<{
+      mes: string;
+      atendidos: number;
+      noAtendidos: number;
+      eliminadas: number;
+    }>;
   }>;
   financiamiento_por_servicio: FinanciamientoPorServicio[];
   historial_quirurgico: Array<{ mes: string; cantidad: number }>;
@@ -108,7 +111,7 @@ export default function DashboardPage() {
   if (!mounted) return null;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
         {loading || !data ? (
           <div className="min-h-[400px] flex flex-col items-center justify-center bg-white border border-slate-100 rounded-3xl p-10 shadow-sm">
             <div className="w-12 h-12 border-4 border-slate-100 border-t-blue-500 rounded-full animate-spin mb-4"></div>
@@ -117,10 +120,10 @@ export default function DashboardPage() {
         ) : (
           <>
             {/* GRID DE CARDS KPI 5 COLUMNAS */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
               
               {/* Card 1: Consultorio Externo Trimestral */}
-              <div className="bg-white border border-slate-100 p-5 rounded-3xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex items-center justify-between group">
+              <div className="bg-white border border-slate-100 p-4 rounded-3xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex items-center justify-between group">
                 <div className="space-y-1">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Consultorio Externo</span>
                   <span className="text-xs text-slate-400 font-medium block -mt-1">Trimestral</span>
@@ -134,7 +137,7 @@ export default function DashboardPage() {
               </div>
 
               {/* Card 2: Hospitalización Trimestral */}
-              <div className="bg-white border border-slate-100 p-5 rounded-3xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex items-center justify-between group">
+              <div className="bg-white border border-slate-100 p-4 rounded-3xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex items-center justify-between group">
                 <div className="space-y-1">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Hospitalización</span>
                   <span className="text-xs text-slate-400 font-medium block -mt-1">Trimestral</span>
@@ -148,7 +151,7 @@ export default function DashboardPage() {
               </div>
 
               {/* Card 3: Emergencia Trimestral */}
-              <div className="bg-white border border-slate-100 p-5 rounded-3xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex items-center justify-between group">
+              <div className="bg-white border border-slate-100 p-4 rounded-3xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex items-center justify-between group">
                 <div className="space-y-1">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Emergencia</span>
                   <span className="text-xs text-slate-400 font-medium block -mt-1">Trimestral</span>
@@ -162,7 +165,7 @@ export default function DashboardPage() {
               </div>
 
               {/* Card 4: Camas Hospitalización en Tiempo Real */}
-              <div className="bg-white border border-slate-100 p-5 rounded-3xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between group">
+              <div className="bg-white border border-slate-100 p-4 rounded-3xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between group">
                 <div className="flex items-center justify-between w-full">
                   <div className="space-y-0.5">
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Camas Hosp.</span>
@@ -191,7 +194,7 @@ export default function DashboardPage() {
               </div>
 
               {/* Card 5: Camas Emergencia en Tiempo Real */}
-              <div className="bg-white border border-slate-100 p-5 rounded-3xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between group">
+              <div className="bg-white border border-slate-100 p-4 rounded-3xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between group">
                 <div className="flex items-center justify-between w-full">
                   <div className="space-y-0.5">
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Camas Emerg.</span>
@@ -222,9 +225,9 @@ export default function DashboardPage() {
             </div>
 
             {/* SECCIÓN DE GRÁFICOS INTERACTIVOS */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
               {/* ESTADO DE CITAS POR SERVICIO */}
-              <div className="bg-white border border-slate-100 p-5 md:p-6 rounded-3xl shadow-sm space-y-4 min-h-[520px] flex flex-col">
+              <div className="bg-white border border-slate-100 p-4 md:p-5 rounded-3xl shadow-sm space-y-3 min-h-[420px] flex flex-col">
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between border-b border-slate-100 pb-3">
                   <div>
                     <h3 className="font-extrabold text-base md:text-lg text-slate-900">Estado de citas por servicio</h3>
@@ -256,43 +259,43 @@ export default function DashboardPage() {
                 <div className="flex-1 h-full pt-2">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
-                      data={(() => {
-                        const servicioSeleccionado = data.estado_citas_por_servicio.find((serv) => serv.servicioId === selectedServicioCitasId);
-                        return [
-                          { name: 'Atendidos', valor: servicioSeleccionado?.atendidos ?? 0, fill: '#10b981' },
-                          { name: 'No atendidos', valor: servicioSeleccionado?.noAtendidos ?? 0, fill: '#f59e0b' },
-                          { name: 'Eliminadas', valor: servicioSeleccionado?.eliminadas ?? 0, fill: '#ef4444' }
-                        ];
-                      })()}
-                      margin={{ top: 24, right: 20, left: 0, bottom: 0 }}
+                      data={data.estado_citas_por_servicio.find((serv) => serv.servicioId === selectedServicioCitasId)?.datos ?? []}
+                      margin={{ top: 12, right: 20, left: 0, bottom: 0 }}
+                      barCategoryGap="20%"
+                      maxBarSize={12}
                     >
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                      <XAxis dataKey="name" stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} />
+                      <XAxis dataKey="mes" stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} />
                       <YAxis stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} />
                       <Tooltip
                         contentStyle={{ background: '#0f172a', color: '#fff', borderRadius: '12px', border: 'none' }}
                         formatter={(value: number) => [value.toLocaleString(), 'Total']}
                       />
-                      <Bar dataKey="valor" radius={[6, 6, 0, 0]} maxBarSize={52}>
-                        {(() => {
-                          const servicioSeleccionado = data.estado_citas_por_servicio.find((serv) => serv.servicioId === selectedServicioCitasId);
-                          const entries = [
-                            { name: 'Atendidos', valor: servicioSeleccionado?.atendidos ?? 0, fill: '#10b981' },
-                            { name: 'No atendidos', valor: servicioSeleccionado?.noAtendidos ?? 0, fill: '#f59e0b' },
-                            { name: 'Eliminadas', valor: servicioSeleccionado?.eliminadas ?? 0, fill: '#ef4444' }
-                          ];
-                          return entries.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.fill} />
-                          ));
-                        })()}
-                      </Bar>
+                      <Bar dataKey="atendidos" name="Atendidos" fill="#10b981" radius={[6, 6, 0, 0]} />
+                      <Bar dataKey="noAtendidos" name="No atendidos" fill="#f59e0b" radius={[6, 6, 0, 0]} />
+                      <Bar dataKey="eliminadas" name="Eliminadas" fill="#ef4444" radius={[6, 6, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
+                </div>
+
+                <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <span>Atendidos</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-amber-500" />
+                    <span>No atendidos</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-red-500" />
+                    <span>Eliminadas</span>
+                  </div>
                 </div>
               </div>
 
               {/* FUENTES DE FINANCIAMIENTO POR SERVICIO */}
-              <div className="bg-white border border-slate-100 p-5 md:p-6 rounded-3xl shadow-sm space-y-4 min-h-[520px] flex flex-col">
+              <div className="bg-white border border-slate-100 p-4 md:p-5 rounded-3xl shadow-sm space-y-3 min-h-[420px] flex flex-col">
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between border-b border-slate-100 pb-3">
                   <div>
                     <h3 className="font-extrabold text-base md:text-lg text-slate-900">Fuentes de financiamiento</h3>

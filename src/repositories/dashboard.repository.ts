@@ -5,6 +5,8 @@ import { executeQuery } from '../lib/db';
 export interface TrimestreServiciosRaw {
   IdTipoServicio: number;
   ServicioNombre: string;
+  MesNum: number;
+  MesNombre: string;
   Cant_Atendidos: number;
   Cant_NoAtendidos: number;
   Cant_Eliminadas: number;
@@ -116,6 +118,12 @@ export class DashboardRepository {
           WHEN 2 THEN 'Emergencia'
           WHEN 3 THEN 'Hospitalización'
         END AS ServicioNombre,
+        MONTH(FechaIngreso) AS MesNum,
+        CASE MONTH(FechaIngreso)
+          WHEN 4 THEN 'Abr'
+          WHEN 5 THEN 'May'
+          WHEN 6 THEN 'Jun'
+        END AS MesNombre,
         SUM(CASE WHEN idEstadoAtencion <> 0
           AND ((IdTipoServicio = 1 AND FyHFinal IS NOT NULL)
             OR (IdTipoServicio IN (2, 3) AND FechaEgreso IS NOT NULL))
@@ -129,8 +137,8 @@ export class DashboardRepository {
       WHERE EsPacienteExterno <> 1
         AND IdTipoServicio IN (1, 2, 3)
         AND FechaIngreso BETWEEN '20260401' AND '20260630'
-      GROUP BY IdTipoServicio
-      ORDER BY IdTipoServicio;
+      GROUP BY IdTipoServicio, MONTH(FechaIngreso)
+      ORDER BY IdTipoServicio, MONTH(FechaIngreso);
     `;
 
     const result = await executeQuery<TrimestreServiciosRaw>(query);
