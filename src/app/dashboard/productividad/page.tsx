@@ -1,5 +1,6 @@
 'use client';
 
+import { generarExcelProductividad, generarPDFProductividad } from '@/lib/exportadores';
 import { useState, useEffect, useMemo } from 'react';
 import {
   ResponsiveContainer,
@@ -43,7 +44,6 @@ interface RowProductividad {
   ausentes: number;
   adicionales: number;
   tiempoPromedio: string;
-  estado: string;
 }
 
 export const dynamic = 'force-dynamic';
@@ -55,10 +55,11 @@ export default function ProductividadPage() {
   const [listaEspecialidades, setListaEspecialidades] = useState<string[]>([]);
   const [listaMedicos, setListaMedicos] = useState<{ id: number; nombre: string }[]>([]);
   
-  // Estado para el filtro local de turno en la tabla
-  const [turnoTabla, setTurnoTabla] = useState<string>('');
+  const [turnoTabla, setTurnoTabla] = useState<string>('Mañana');
+  const [paginaActual, setPaginaActual] = useState<number>(1);
+  const filasPorPagina = 10;
 
-  // Rango de fechas dinámico (Tiempo real basado en Junio 2026)
+  // Rango de fechas dinámico adaptativo (Junio 2026)
   const filtrosInicial = useMemo<FiltrosState>(() => {
     const hoy = new Date(); 
     const añoActual = hoy.getFullYear(); 
@@ -96,6 +97,7 @@ export default function ProductividadPage() {
       
       const data: RowProductividad[] = await respuesta.json();
       setDatosHospital(data);
+      setPaginaActual(1);
 
       if (!filtrosAEnviar.especialidad && !filtrosAEnviar.medico) {
         const bgEspecialidades = Array.from(new Set(data.map(m => m.especialidad))).sort();
@@ -137,15 +139,12 @@ export default function ProductividadPage() {
   const handleFiltrar = () => fetchProductividad(filtros);
   const handleLimpiar = () => {
     setFiltros(filtrosInicial);
-    setTurnoTabla('');
+    setTurnoTabla('Mañana');
     fetchProductividad(filtrosInicial);
   };
 
-  // ==========================================
-  // PROCESAMIENTO E INTELIGENCIA DE GRÁFICOS (CONSOLIDACIÓN Y TOP 5)
-  // ==========================================
+  // Consolidación limpia por médico y especialidad
   const productividadData = useMemo(() => {
-    // 1. Agrupamos y consolidamos turnos duplicados para evitar barras repetidas
     const mapaConsolidado = new Map<string, { nombre: string; especialidad: string; atendidos: number; agendadas: number }>();
     
     datosHospital.forEach((item) => {
@@ -164,56 +163,61 @@ export default function ProductividadPage() {
       }
     });
 
-    const arreglado = Array.from(mapaConsolidado.values()).map((m) => ({
-      nombre: `${m.nombre} (${m.especialidad})`,
-      porcentaje: m.agendadas > 0 ? Number(((m.atendidos / m.agendadas) * 100).toFixed(1)) : 0,
-      atendidos: m.atendidos,
-      agendadas: m.agendadas,
-    }));
+    const arreglado = Array.from(mapaConsolidado.values()).map((m) => {
+      const nombreTruncado = m.nombre.length > 22 ? `${m.nombre.substring(0, 22)}...` : m.nombre;
+      return {
+        idUnico: m.nombre, 
+        labelEjeY: `${nombreTruncado} (${m.especialidad})`, 
+        atendidos: m.atendidos,
+        agendadas: m.agendadas,
+      };
+    });
 
-    // 2. Si está "A lo natural" (sin filtros), ordenamos por más atendidos y recortamos al Top 5
     if (!filtros.especialidad && !filtros.medico) {
       return arreglado.sort((a, b) => b.atendidos - a.atendidos).slice(0, 5);
     }
-
-    // Si hay filtros, mostramos todos los de esa área ordenados por porcentaje
-    return arreglado.sort((a, b) => b.porcentaje - a.porcentaje);
+    return arreglado.sort((a, b) => b.atendidos - a.atendidos);
   }, [datosHospital, filtros.especialidad, filtros.medico]);
 
-  // Datos de composición globales basados estrictamente en el universo del gráfico actual
-  const datosComposicion = useMemo(() => {
-    // Si el gráfico está mostrando un Top 5 o un filtro, la torta debe reflejar exactamente esa misma sumatoria
-    const medicosActivos = new Set(productividadData.map(p => p.nombre.split(' (')[0]));
+  // Universo operativo de la dona central
+  const totalCitasProcesadas = useMemo(() => {
+    const nombresActivos = new Set(productividadData.map(p => p.idUnico));
+    const filtrados = datosHospital.filter(dh => nombresActivos.has(dh.nombre));
     
-    const filtrados = datosHospital.filter(dh => medicosActivos.has(dh.nombre));
+    const atendidos = filtrados.reduce((acc, cur) => acc + cur.atendidos, 0);
+    const ausentes = filtrados.reduce((acc, cur) => acc + cur.ausentes, 0);
+    const adicionales = filtrados.reduce((acc, cur) => acc + cur.adicionales, 0);
 
-    return [
-      { name: 'Atendidos', value: filtrados.reduce((acc, cur) => acc + cur.atendidos, 0), color: '#2563eb' },
-      { name: 'Ausentes', value: filtrados.reduce((acc, cur) => acc + cur.ausentes, 0), color: '#ef4444' },
-      { name: 'Adicionales', value: filtrados.reduce((acc, cur) => acc + cur.adicionales, 0), color: '#10b981' },
-    ];
+    return {
+      total: atendidos + ausentes,
+      atendidos,
+      ausentes,
+      adicionales,
+      datosGrafico: [
+        { name: 'Atendidos', value: atendidos, color: '#2563eb' },
+        { name: 'Ausentes', value: ausentes, color: '#ef4444' },
+        { name: 'Adicionales', value: adicionales, color: '#10b981' },
+      ].filter(d => d.value > 0)
+    };
   }, [datosHospital, productividadData]);
 
-  // FILTRO LOCAL EXCLUSIVO DE LA TABLA (React Side)
   const datosTablaFiltrados = useMemo(() => {
-    if (!turnoTabla) return datosHospital;
     return datosHospital.filter((d) => d.turno === turnoTabla);
   }, [datosHospital, turnoTabla]);
 
+  const totalPaginas = Math.ceil(datosTablaFiltrados.length / filasPorPagina);
+  
+  const tablaPaginada = useMemo(() => {
+    const inicio = (paginaActual - 1) * filasPorPagina;
+    return datosTablaFiltrados.slice(inicio, inicio + filasPorPagina);
+  }, [datosTablaFiltrados, paginaActual]);
+
   return (
-    <div className="space-y-4 text-slate-800">
+    <div className="h-[calc(100vh-5.5rem)] flex flex-col space-y-3 text-slate-800 overflow-hidden select-none">
       
       {/* SECCIÓN DE FILTROS SUPERIORES */}
-      <div className="bg-white p-4 md:p-5 rounded-3xl border border-slate-200 shadow-sm">
-        <div className="mb-3">
-          <h2 className="text-lg font-extrabold tracking-tight text-slate-900">Productividad Hospitalaria Real</h2>
-          <p className="text-slate-500 text-[11px] mt-1">
-            Análisis clasificado estructuralmente por la tabla maestra de turnos institucionales de consulta externa.
-          </p>
-        </div>
-
-        <div className="flex flex-col sm:flex-row gap-2 bg-slate-50 p-3 rounded-2xl border border-slate-100 items-end flex-wrap">
-          
+      <div className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex-none">
+        <div className="flex flex-col sm:flex-row gap-2 bg-slate-50 p-2 rounded-xl border border-slate-100 items-end flex-wrap">
           <div className="flex flex-col gap-0.5 min-w-max relative">
             <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider px-1">Fecha Inicio</span>
             <div className="relative flex items-center">
@@ -222,7 +226,7 @@ export default function ProductividadPage() {
                 name="fechaInicio"
                 value={filtros.fechaInicio}
                 onChange={handleInputChange}
-                className="bg-white border border-slate-200 rounded-lg pl-2 pr-8 h-8 flex items-center text-xs font-medium text-slate-700 w-36 outline-none focus:border-blue-500 cursor-pointer appearance-none"
+                className="bg-white border border-slate-200 rounded-lg pl-2 pr-8 h-8 flex items-center text-xs font-medium text-slate-700 w-36 outline-none focus:border-blue-500 cursor-pointer"
               />
               <Calendar className="w-3 h-3 text-slate-400 absolute right-2.5 pointer-events-none" />
             </div>
@@ -236,7 +240,7 @@ export default function ProductividadPage() {
                 name="fechaFin"
                 value={filtros.fechaFin}
                 onChange={handleInputChange}
-                className="bg-white border border-slate-200 rounded-lg pl-2 pr-8 h-8 flex items-center text-xs font-medium text-slate-700 w-36 outline-none focus:border-blue-500 cursor-pointer appearance-none"
+                className="bg-white border border-slate-200 rounded-lg pl-2 pr-8 h-8 flex items-center text-xs font-medium text-slate-700 w-36 outline-none focus:border-blue-500 cursor-pointer"
               />
               <Calendar className="w-3 h-3 text-slate-400 absolute right-2.5 pointer-events-none" />
             </div>
@@ -278,14 +282,14 @@ export default function ProductividadPage() {
             <button
               onClick={handleFiltrar}
               disabled={loading}
-              className="h-8 flex items-center justify-center gap-1 bg-blue-600 text-white font-bold text-xs rounded-lg shadow-sm hover:bg-blue-700 transition-colors px-3 whitespace-nowrap disabled:bg-blue-400"
+              className="h-8 flex items-center justify-center gap-1 bg-blue-600 text-white font-bold text-xs rounded-lg shadow-sm hover:bg-blue-700 px-3 disabled:bg-blue-400 transition"
             >
               <Search className="w-3.5 h-3.5" />
-              <span>{loading ? 'Cargando...' : 'Filtrar'}</span>
+              <span>Filtrar</span>
             </button>
             <button
               onClick={handleLimpiar}
-              className="h-8 w-8 flex items-center justify-center bg-slate-300 text-slate-700 rounded-lg shadow-sm hover:bg-slate-400 transition-colors"
+              className="h-8 w-8 flex items-center justify-center bg-slate-300 text-slate-700 rounded-lg shadow-sm hover:bg-slate-400 transition"
             >
               <Eraser className="w-3.5 h-3.5" />
             </button>
@@ -293,182 +297,193 @@ export default function ProductividadPage() {
         </div>
       </div>
 
-      {/* VISTAS TOGGLE */}
-      <div className="flex items-center gap-1 bg-white p-1 rounded-2xl border border-slate-200 shadow-sm w-fit">
+      {/* SELECTOR DE PESTAÑAS */}
+      <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 shadow-sm w-fit flex-none">
         <button
           onClick={() => setVistaActual('grafico')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold text-xs transition-all duration-200 ${
-            vistaActual === 'grafico' ? 'bg-blue-100 text-blue-700 shadow-sm' : 'bg-transparent text-slate-600 hover:text-slate-900'
+          className={`flex items-center gap-1.5 px-3 py-1 rounded-lg font-semibold text-xs transition-all duration-150 ${
+            vistaActual === 'grafico' ? 'bg-blue-100 text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
           }`}
         >
-          <BarChart3 className="w-3.5 h-3.5" />
-          Gráficos
+          <BarChart3 className="w-3.5 h-3.5" /> Gráficos
         </button>
         <button
           onClick={() => setVistaActual('tabla')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold text-xs transition-all duration-200 ${
-            vistaActual === 'tabla' ? 'bg-blue-100 text-blue-700 shadow-sm' : 'bg-transparent text-slate-600 hover:text-slate-900'
+          className={`flex items-center gap-1.5 px-3 py-1 rounded-lg font-semibold text-xs transition-all duration-150 ${
+            vistaActual === 'tabla' ? 'bg-blue-100 text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
           }`}
         >
-          <Table2 className="w-3.5 h-3.5" />
-          Tablas
+          <Table2 className="w-3.5 h-3.5" /> Tablas
         </button>
       </div>
 
-      {/* RENDERS PRINCIPALES */}
-      {loading ? (
-        <div className="bg-white p-12 rounded-3xl border border-slate-200 shadow-sm flex justify-center items-center text-slate-500 font-semibold text-xs">
-          Calculando base de datos transaccional en tiempo real...
-        </div>
-      ) : datosHospital.length === 0 ? (
-        <div className="bg-white p-12 rounded-3xl border border-slate-200 shadow-sm flex justify-center items-center text-slate-400 text-xs font-medium">
-          No se registran atenciones clínicas bajo los filtros establecidos en este rango.
-        </div>
-      ) : (
-        <>
-          {/* SECCIÓN DE GRÁFICOS (CON LOGICA TOP 5 / COMPRESIÓN) */}
-          {vistaActual === 'grafico' && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
-              <div className="bg-white border border-slate-100 p-4 md:p-5 rounded-3xl shadow-sm space-y-3 min-h-[420px] flex flex-col">
-                <div className="border-b border-slate-100 pb-2">
-                  <h3 className="font-extrabold text-base text-slate-900">
-                    {!filtros.especialidad && !filtros.medico ? 'Top 5 Médicos con Más Atenciones' : 'Productividad por Especialidad'}
-                  </h3>
-                  <p className="text-xs text-slate-400 mt-0.5">% Rendimiento Asistencial</p>
-                </div>
-                <div className="flex-1 min-h-0">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={productividadData} layout="vertical" margin={{ top: 5, right: 30, left: 5, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                      <XAxis type="number" domain={[0, 100]} tickFormatter={(v: number) => `${v}%`} stroke="#94a3b8" fontSize={10} />
-                      <YAxis type="category" dataKey="nombre" width={160} tick={{ fontSize: 8, fill: '#0f172a' }} />
-                      <Tooltip formatter={(value: number | string) => `${value}%`} />
-                      <Bar dataKey="porcentaje" barSize={12} radius={3}>
-                        <LabelList dataKey="porcentaje" position="right" formatter={(v: number) => `${v}%`} fontSize={9} />
-                        {productividadData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.porcentaje < 75 ? '#ef4444' : '#2563eb'} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
+      {/* ÁREA CENTRAL INDEPENDIENTE Y ADAPTATIVA */}
+      <div className="flex-1 min-h-0 relative">
+        {vistaActual === 'grafico' && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-full items-start">
+            
+            {/* CARD GRÁFICO BARRAS MODERADO */}
+            <div className="bg-white border border-slate-100 p-4 rounded-3xl shadow-sm flex flex-col justify-between min-h-[340px]">
+              <div className="border-b border-slate-50 pb-2">
+                <h3 className="font-extrabold text-sm text-slate-900">
+                  {!filtros.especialidad && !filtros.medico ? 'Top 5 Médicos con Mayor Producción' : 'Volumen de Producción'}
+                </h3>
               </div>
-
-              <div className="bg-white border border-slate-100 p-4 md:p-5 rounded-3xl shadow-sm space-y-3 min-h-[420px] flex flex-col">
-                <div className="border-b border-slate-100 pb-2">
-                  <h3 className="font-extrabold text-base text-slate-900">Composición de Atenciones</h3>
-                  <p className="text-xs text-slate-400 mt-0.5">Distribución proporcional de carga médica analizada</p>
-                </div>
-                <div className="flex-1 min-h-0 flex items-center justify-center">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={datosComposicion}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        label={({ name, value }: { name: string; value: number }) => value > 0 ? `${name}: ${value}` : ''}
-                        outerRadius={90}
-                        dataKey="value"
-                      >
-                        {datosComposicion.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(value: number | string) => `${value} pacientes`} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
+              <div className="mt-3 w-full h-[240px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={productividadData} layout="vertical" margin={{ top: 5, right: 35, left: 5, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis type="number" stroke="#94a3b8" fontSize={9} hide />
+                    <YAxis type="category" dataKey="labelEjeY" width={220} tick={{ fontSize: 8, fill: '#0f172a', fontWeight: 'bold' }} tickLine={false} axisLine={false} />
+                    <Tooltip 
+                      labelStyle={{ display: 'none' }} 
+                      contentStyle={{ padding: '4px 8px', borderRadius: '8px', fontSize: '10px', fontWeight: 'bold' }}
+                      formatter={(value: any) => [`${value} pacientes`, 'Atendidos']} 
+                    />
+                    <Bar dataKey="atendidos" fill="#2563eb" barSize={12} radius={3}>
+                      <LabelList dataKey="atendidos" position="right" fontSize={9} fontWeight="bold" fill="#475569" />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             </div>
-          )}
 
-          {/* SECCIÓN DE TABLA (CON FILTRO DE TURNO INTEGRADO) */}
-          {vistaActual === 'tabla' && (
-            <div className="bg-white border border-slate-100 p-4 md:p-5 rounded-3xl shadow-sm space-y-3 min-h-[380px] flex flex-col">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-2 flex-wrap gap-2">
-                <div>
-                  <h3 className="font-extrabold text-base text-slate-900">Desempeño por Médico</h3>
-                  <p className="text-xs text-slate-400 mt-0.5">Información completa extraída del SIGH</p>
+            {/* CARD GRÁFICO DONA MODERADO */}
+            <div className="bg-white border border-slate-100 p-4 rounded-3xl shadow-sm flex flex-col justify-between min-h-[340px]">
+              <div className="border-b border-slate-50 pb-2">
+                <h3 className="font-extrabold text-sm text-slate-900">Composición Operativa de Citas</h3>
+              </div>
+              <div className="flex relative items-center justify-center h-[200px] mt-2">
+                <div className="absolute flex flex-col items-center justify-center text-center">
+                  <span className="text-xl font-black text-slate-900 leading-none">{totalCitasProcesadas.total}</span>
+                  <span className="text-[8px] font-bold uppercase tracking-wider text-slate-400 mt-1">Citas Totales</span>
                 </div>
-                
-                {/* FILTRO DE TURNO UBICADO AL LADO DE EXCEL/PDF */}
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg px-2 h-8 text-[11px]">
-                    <span className="font-bold text-slate-400 uppercase text-[9px] tracking-wider mr-1">Turno Tabla:</span>
-                    <select
-                      value={turnoTabla}
-                      onChange={(e) => setTurnoTabla(e.target.value)}
-                      className="bg-transparent font-semibold text-slate-700 outline-none cursor-pointer"
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={totalCitasProcesadas.datosGrafico}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={80}
+                      paddingAngle={3}
+                      dataKey="value"
                     >
-                      <option value="">Todos</option>
-                      <option value="Mañana">Mañana</option>
-                      <option value="Tarde">Tarde</option>
-                    </select>
-                  </div>
-
-                  <div className="flex items-center gap-1.5">
-                    <button className="flex items-center gap-1 bg-white border border-slate-200 text-slate-600 px-2 py-1.5 rounded-lg text-[10px] font-bold shadow-sm hover:bg-slate-50">
-                      <FileSpreadsheet className="w-3 h-3 text-emerald-600" />
-                      <span>Excel</span>
-                    </button>
-                    <button className="flex items-center gap-1 bg-white border border-slate-200 text-slate-600 px-2 py-1.5 rounded-lg text-[10px] font-bold shadow-sm hover:bg-slate-50">
-                      <FileText className="w-3 h-3 text-red-500" />
-                      <span>PDF</span>
-                    </button>
-                  </div>
-                </div>
+                      {totalCitasProcesadas.datosGrafico.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={{ fontSize: '10px', borderRadius: '8px' }} formatter={(value: any) => `${value} pacientes`} />
+                  </PieChart>
+                </ResponsiveContainer>
               </div>
-
-              <div className="overflow-x-auto flex-1">
-                <table className="w-full text-left border-collapse text-[11px]">
-                  <thead>
-                    <tr className="border-b border-slate-200 bg-slate-50 text-slate-600 text-[9px] uppercase tracking-wider font-bold">
-                      <th className="px-3 py-2 font-bold">Médico</th>
-                      <th className="px-3 py-2 font-bold">Especialidad</th>
-                      <th className="px-3 py-2 text-center font-bold">Turno</th>
-                      <th className="px-3 py-2 text-center font-bold">Agendadas</th>
-                      <th className="px-3 py-2 text-center font-bold">Atendidas</th>
-                      <th className="px-3 py-2 text-center font-bold">% Asist.</th>
-                      <th className="px-3 py-2 text-center font-bold">Adic.</th>
-                      <th className="px-3 py-2 text-center font-bold">Ausentes</th>
-                      <th className="px-3 py-2 text-center font-bold">T. Prom.</th>
-                      <th className="px-3 py-2 text-right font-bold">Estado</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {datosTablaFiltrados.map((medico, idx) => {
-                      const porcentajeAsistencia = medico.agendadas > 0 ? ((medico.atendidos / medico.agendadas) * 100).toFixed(1) : '0.0';
-                      return (
-                        <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="px-3 py-2">
-                            <p className="font-bold text-slate-800">{medico.nombre}</p>
-                          </td>
-                          <td className="px-3 py-2 text-slate-600">{medico.especialidad}</td>
-                          <td className="px-3 py-2 text-center text-slate-600 text-[10px]">{medico.turno}</td>
-                          <td className="px-3 py-2 text-center font-medium text-slate-800">{medico.agendadas}</td>
-                          <td className="px-3 py-2 text-center font-medium text-blue-600">{medico.atendidos}</td>
-                          <td className="px-3 py-2 text-center font-bold text-slate-800">{porcentajeAsistencia}%</td>
-                          <td className="px-3 py-2 text-center font-bold text-emerald-600 bg-emerald-50/40 rounded text-[10px]">{medico.adicionales}</td>
-                          <td className="px-3 py-2 text-center text-red-500 font-medium text-[10px]">{medico.ausentes}</td>
-                          <td className="px-3 py-2 text-center text-slate-600 text-[10px]">{medico.tiempoPromedio}</td>
-                          <td className="px-3 py-2 text-right">
-                            <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full inline-block ${
-                              medico.estado === 'Atendiendo con Normalidad' ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-600'
-                            }`}>
-                              {medico.estado}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+              <div className="flex justify-center items-center gap-4 text-[9px] font-bold border-t border-slate-50 pt-2.5 mt-2 flex-none">
+                <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-600 block"/>Atendidos: {totalCitasProcesadas.atendidos}</div>
+                <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 block"/>Ausentes: {totalCitasProcesadas.ausentes}</div>
+                <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 block"/>Adicionales: {totalCitasProcesadas.adicionales}</div>
               </div>
             </div>
-          )}
-        </>
-      )}
+
+          </div>
+        )}
+
+        {/* TABLA MEJORADA CON ENCAJE TOTAL */}
+        {vistaActual === 'tabla' && (
+          <div className="bg-white border border-slate-200 p-4 rounded-3xl shadow-sm h-full flex flex-col min-h-0">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2 flex-none gap-2">
+              <div>
+                <h3 className="font-extrabold text-xs text-slate-900">Desempeño Longitudinal</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-[28px] px-3 h-8 text-xs text-slate-700">
+                  <span className="font-bold text-slate-400 text-[10px] mr-1">Turno:</span>
+                  <select
+                    value={turnoTabla}
+                    onChange={(e) => { setTurnoTabla(e.target.value); setPaginaActual(1); }}
+                    className="bg-transparent font-bold outline-none cursor-pointer text-slate-700"
+                  >
+                    <option value="Mañana">Mañana</option>
+                    <option value="Tarde">Tarde</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-1">
+                {/* Botón de Excel Optimizado */}
+                <button 
+                  onClick={() => generarExcelProductividad(datosTablaFiltrados, turnoTabla)}
+                  className="flex items-center gap-1 bg-white border border-slate-200 text-slate-600 px-3 h-8 rounded-[28px] text-xs font-bold shadow-sm hover:bg-slate-50"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" /> <span>Excel</span>
+                </button>
+
+                {/* Botón de PDF Optimizado */}
+                <button 
+                  onClick={() => generarPDFProductividad(datosTablaFiltrados, turnoTabla)}
+                  className="flex items-center gap-1 bg-white border border-slate-200 text-slate-600 px-3 h-8 rounded-[28px] text-xs font-bold shadow-sm hover:bg-slate-50"
+                >
+                  <FileText className="w-3.5 h-3.5 text-red-500" /> <span>PDF</span>
+                </button>
+              </div>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-hidden mt-2">
+              <table className="w-full text-left border-collapse text-[11px]">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50 text-slate-600 text-[9px] uppercase tracking-wider font-bold">
+                    <th className="px-3 py-2.5 font-bold">Médico</th>
+                    <th className="px-3 py-2.5 font-bold">Especialidad</th>
+                    <th className="px-3 py-2.5 text-center font-bold">Turno</th>
+                    <th className="px-3 py-2.5 text-center font-bold">Agendadas</th>
+                    <th className="px-3 py-2.5 text-center font-bold">Atendidas</th>
+                    <th className="px-3 py-2.5 text-center font-bold">% Asist.</th>
+                    <th className="px-3 py-2.5 text-center font-bold">Adic.</th>
+                    <th className="px-3 py-2.5 text-center font-bold">Ausentes</th>
+                    <th className="px-3 py-2.5 text-center font-bold">T. Prom.</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {tablaPaginada.map((medico, idx) => {
+                    const porcentajeAsistencia = medico.agendadas > 0 ? ((medico.atendidos / medico.agendadas) * 100).toFixed(1) : '0.0';
+                    return (
+                      <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="px-3 py-2.5 font-bold text-slate-800">{medico.nombre}</td>
+                        <td className="px-3 py-2.5 text-slate-600">{medico.especialidad}</td>
+                        <td className="px-3 py-2.5 text-center text-slate-600">{medico.turno}</td>
+                        <td className="px-3 py-2.5 text-center font-medium text-slate-800">{medico.agendadas}</td>
+                        <td className="px-3 py-2.5 text-center font-medium text-blue-600">{medico.atendidos}</td>
+                        <td className="px-3 py-2.5 text-center font-bold text-slate-800">{porcentajeAsistencia}%</td>
+                        <td className="px-3 py-2.5 text-center font-bold text-emerald-600 bg-emerald-50/40 rounded text-[10px]">{medico.adicionales}</td>
+                        <td className="px-3 py-2.5 text-center text-red-500 font-medium">{medico.ausentes}</td>
+                        <td className="px-3 py-2.5 text-center text-slate-600">{medico.tiempoPromedio}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* BOTONERA NUMÉRICA COMPACTA */}
+            <div className="flex items-center justify-between border-t border-slate-100 pt-3 mt-auto flex-none text-xs font-bold text-slate-500">
+              <span>Mostrando {tablaPaginada.length} de {datosTablaFiltrados.length} registros</span>
+              <div className="flex items-center gap-1">
+                {Array.from({ length: totalPaginas }).map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setPaginaActual(i + 1)}
+                    className={`w-6 h-6 flex items-center justify-center rounded-lg text-[10px] font-bold border transition-colors ${
+                      paginaActual === i + 1
+                        ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    {i + 1}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

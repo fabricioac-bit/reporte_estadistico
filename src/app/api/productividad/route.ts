@@ -1,31 +1,31 @@
 import { NextResponse } from 'next/server';
-import { ProductividadRepository } from '@/repositories/productividad.repository';
+import { ProductividadService } from '@/services/productividad.service';
 
 export async function GET(request: Request) {
-  const repoProductividad = new ProductividadRepository();
+  // Instanciamos el Service para respetar las capas del software, no el Repo de frente
+  const servicioProductividad = new ProductividadService();
   
   try {
     const { searchParams } = new URL(request.url);
     
+    // Mapeamos las llaves exactamente con los nombres que espera recibir tu "FiltrosRaw" del Service
     const filtrosRaw = {
       fechaInicio: searchParams.get('fechaInicio') || '',
       fechaFin: searchParams.get('fechaFin') || '',
       turno: searchParams.get('turno'),
-      especialidadId: searchParams.get('especialidadId'), // Captura el string del nombre del servicio
-      medicoId: searchParams.get('medicoId'),
+      especialidad: searchParams.get('especialidadId'), // Se alinea como "especialidad" string
+      medico: searchParams.get('medicoId'),             // Se alinea como "medico" para que el service lo parsee a Int
     };
 
-    const data = await repoProductividad.obtenerProductividadMedica({
-      fechaInicio: filtrosRaw.fechaInicio,
-      fechaFin: filtrosRaw.fechaFin,
-      turno: filtrosRaw.turno,
-      especialidadId: filtrosRaw.especialidadId, 
-      medicoId: filtrosRaw.medicoId ? parseInt(filtrosRaw.medicoId, 10) : null,
-    });
+    // Consumimos a través del Service pasándole el objeto crudo de la URL
+    const respuestaConsolidada = await servicioProductividad.obtenerReporteEstadistico(filtrosRaw);
 
-    return NextResponse.json(data);
+    // Como tu frontend del dashboard ya espera el arreglo de datos directo para los gráficos y tablas, 
+    // respondemos con el .data que devolvió el Service
+    return NextResponse.json(respuestaConsolidada.data);
+    
   } catch (error: any) {
-    console.error("💥 Error en el controlador de Next.js (route.ts):", error.message);
+    console.error("Error en el controlador de Next.js (route.ts):", error.message);
     return NextResponse.json(
       { success: false, mensaje: error.message || 'Error interno en el servidor' }, 
       { status: 500 }

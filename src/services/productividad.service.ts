@@ -9,7 +9,7 @@ interface FiltrosRaw {
 }
 
 export class ProductividadService {
-    // Instanciamos el repositorio internamente de manera privada, igual que en tu Dashboard
+    // Instanciamos el repositorio de manera privada siguiendo tu arquitectura
     private productividadRepository = new ProductividadRepository();
 
     async obtenerReporteEstadistico(filtrosRaw: FiltrosRaw) {
@@ -17,8 +17,7 @@ export class ProductividadService {
             const filtros: FiltrosProductividad = {
                 fechaInicio: filtrosRaw.fechaInicio ? String(filtrosRaw.fechaInicio) : '',
                 fechaFin: filtrosRaw.fechaFin ? String(filtrosRaw.fechaFin) : '',
-                turno: filtrosRaw.turno || null,
-                especialidadId: filtrosRaw.especialidad && filtrosRaw.especialidad !== '' ? parseInt(filtrosRaw.especialidad, 10) : null,
+                especialidadId: filtrosRaw.especialidad && filtrosRaw.especialidad !== '' ? String(filtrosRaw.especialidad) : null, // Mantenemos String de texto limpio
                 medicoId: filtrosRaw.medico && filtrosRaw.medico !== '' ? parseInt(filtrosRaw.medico, 10) : null
             };
 
@@ -26,7 +25,7 @@ export class ProductividadService {
                 throw new Error("El rango de fechas es obligatorio.");
             }
 
-            // Invocamos al repositorio instanciado
+            // Invocamos correctamente al repositorio
             const data = await this.productividadRepository.obtenerProductividadMedica(filtros);
             
             // Retornamos bajo la misma estructura unificada de tu arquitectura
